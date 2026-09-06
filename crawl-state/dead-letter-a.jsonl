@@ -1,1 +1,7 @@
 {"url": "https://cooking.nytimes.com/recipes/1023313-bulgogi-style-tofu", "nyt_id": "1023313", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-06T22:27:24Z"}
+{"url": "https://cooking.nytimes.com/recipes/1013903-simple-provencal-winter-squash-gratin", "nyt_id": "1013903", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:47:24Z"}
+{"url": "https://cooking.nytimes.com/recipes/1013905-winter-squash-and-sage-blini", "nyt_id": "1013905", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:47:28Z"}
+{"url": "https://cooking.nytimes.com/recipes/1013915-black-and-white-quinoa-dressing-with-butternut-squash-and-pecans", "nyt_id": "1013915", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:47:33Z"}
+{"url": "https://cooking.nytimes.com/recipes/1013916-red-and-black-rice-stuffing-with-red-lentils-almonds-and-cranberries", "nyt_id": "1013916", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:47:35Z"}
+{"url": "https://cooking.nytimes.com/recipes/1013917-red-rice-and-quinoa-stuffing-with-mushrooms-and-kale", "nyt_id": "1013917", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:47:37Z"}
+{"url": "https://cooking.nytimes.com/recipes/1014185-louisiana-blue-crab-and-blood-orange-salad", "nyt_id": "1014185", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:50:12Z"}
