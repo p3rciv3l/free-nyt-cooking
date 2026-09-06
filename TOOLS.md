@@ -129,8 +129,8 @@ nytc get miso-chicken
 ## Repo tooling (data pipeline)
 
 ```bash
-python3 tools/scrape.py --urls urls.txt          # crawl -> data/recipes/ shards
-python3 tools/validate.py data/recipes/          # schema-validate every line (CI gate)
+python3 tools/scrape.py --urls urls.txt          # crawl -> data/shards/ shards
+python3 tools/validate.py data/shards/          # schema-validate every line (CI gate)
 python3 tools/merge_shards.py                    # post-crawl: unify <prefix>.<crawler>.jsonl -> <prefix>.jsonl
 python3 tools/build_db.py                        # rebuild db/recipes.db + data/manifest.json
 ```

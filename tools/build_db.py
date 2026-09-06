@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""Rebuild db/recipes.db from data/recipes/*.jsonl and refresh data/manifest.json.
+"""Rebuild db/recipes.db from data/shards/*.jsonl and refresh data/manifest.json.
 
 Idempotent and order-independent: the db is dropped and rebuilt from the
 canonical shards every run. Stdlib only.
 
 Usage:
-    python3 tools/build_db.py [--data-dir data/recipes] [--db db/recipes.db]
+    python3 tools/build_db.py [--data-dir data/shards] [--db db/recipes.db]
                               [--manifest data/manifest.json] [--no-manifest]
 """
 import argparse
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
+
+SHARD_NAME_RE = re.compile(r"^[a-z0-9]{2}(\.[a-z])?\.jsonl$")
+
 from datetime import datetime, timezone
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +33,7 @@ def load_records(data_dir):
     <prefix>.<crawler>.jsonl). Duplicate slugs: newest scraped_at wins."""
     records = {}
     for name in sorted(os.listdir(data_dir)):
-        if not name.endswith(".jsonl"):
+        if not SHARD_NAME_RE.match(name):
             continue
         path = os.path.join(data_dir, name)
         with open(path, encoding="utf-8") as fh:
@@ -132,7 +136,7 @@ def refresh_manifest(data_dir, manifest_path):
     nutrition = {"nyt": 0, "computed": 0, "mixed": 0, "none": 0}
     scraper_versions = set()
     for name in sorted(os.listdir(data_dir)):
-        if not name.endswith(".jsonl"):
+        if not SHARD_NAME_RE.match(name):
             continue
         path = os.path.join(data_dir, name)
         h = hashlib.sha256()
@@ -177,7 +181,7 @@ def refresh_manifest(data_dir, manifest_path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", default=os.path.join(REPO_ROOT, "data", "recipes"))
+    ap.add_argument("--data-dir", default=os.path.join(REPO_ROOT, "data", "shards"))
     ap.add_argument("--db", default=os.path.join(REPO_ROOT, "db", "recipes.db"))
     ap.add_argument("--manifest", default=os.path.join(REPO_ROOT, "data", "manifest.json"))
     ap.add_argument("--no-manifest", action="store_true")

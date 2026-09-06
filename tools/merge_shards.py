@@ -7,7 +7,7 @@ record with the newest scraped_at wins. Lines are sorted by slug. Per-crawler
 files are removed after a successful merge. Stdlib only.
 
 Usage:
-    python3 tools/merge_shards.py [--data-dir data/recipes] [--dry-run]
+    python3 tools/merge_shards.py [--data-dir data/shards] [--dry-run]
 """
 import argparse
 import glob
@@ -23,7 +23,7 @@ CRAWLER_SHARD_RE = re.compile(r"^([a-z0-9]{2})\.[a-z]\.jsonl$")
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", default=os.path.join(REPO_ROOT, "data", "recipes"))
+    ap.add_argument("--data-dir", default=os.path.join(REPO_ROOT, "data", "shards"))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
 

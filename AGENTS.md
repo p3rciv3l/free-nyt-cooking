@@ -6,7 +6,7 @@ querying. Nothing here requires network access.
 ## 30-second orientation
 
 - The data: ~26k recipes from cooking.nytimes.com, as JSONL shards in
-  `data/recipes/` plus a prebuilt SQLite db at `db/recipes.db`.
+  `data/shards/` plus a prebuilt SQLite db at `db/recipes.db`.
 - The tool: `tools/nytc` — one CLI, JSON in/stdout out. **Always query through
   `nytc`; do not read the JSONL files or open the db yourself.**
 - The machine-readable version of everything below: `tools-manifest.json`.
@@ -15,7 +15,7 @@ querying. Nothing here requires network access.
 ## If `db/recipes.db` is missing
 
 ```bash
-python3 tools/build_db.py        # rebuilds from data/recipes/ in < 1 min
+python3 tools/build_db.py        # rebuilds from data/shards/ in < 1 min
 ```
 
 ## The one workflow that covers 95% of uses

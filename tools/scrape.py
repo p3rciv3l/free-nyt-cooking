@@ -4,14 +4,14 @@
 Reads a URL manifest (one recipe URL per line), fetches each page politely
 (raw HTML cached on disk so re-runs are cheap and re-parses need no network),
 parses with recipe-scrapers (JSON-LD fallback), and writes canonical records
-(SCHEMA.md) into data/recipes/<2-char-slug-prefix>.jsonl, full-record replace
+(SCHEMA.md) into data/shards/<2-char-slug-prefix>.jsonl, full-record replace
 keyed on slug, lines sorted by slug.
 
 Requires: pip install recipe-scrapers   (the only non-stdlib dependency)
 
 Usage:
     python3 tools/scrape.py --urls urls.txt [--delay 2.0] [--limit N]
-                            [--data-dir data/recipes] [--cache-dir .cache/html]
+                            [--data-dir data/shards] [--cache-dir .cache/html]
                             [--checkpoint .cache/checkpoint.json] [--reparse-only]
 
 Checkpointing: every fetched/parsed URL is recorded; re-running resumes where
@@ -486,7 +486,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--urls", required=True, help="file with one recipe URL per line")
-    ap.add_argument("--data-dir", default="data/recipes")
+    ap.add_argument("--data-dir", default="data/shards")
     ap.add_argument("--cache-dir", default=".cache/html")
     ap.add_argument("--checkpoint", default=".cache/checkpoint.json")
     ap.add_argument("--delay", type=float, default=2.0,

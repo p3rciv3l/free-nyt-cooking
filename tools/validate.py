@@ -5,7 +5,7 @@ Stdlib-only (a small JSON Schema draft-2020-12 subset covering every construct
 used by recipe.schema.json) so CI needs nothing but Python.
 
 Usage:
-    python3 tools/validate.py [data/recipes/ | shard.jsonl ...] [--schema PATH]
+    python3 tools/validate.py [data/shards/ | shard.jsonl ...] [--schema PATH]
 
 Exit code 0 = every line valid. Errors print to stderr as
 <file>:<line>: <path>: <message>.
@@ -15,6 +15,9 @@ import json
 import os
 import re
 import sys
+
+SHARD_NAME_RE = re.compile(r"^[a-z0-9]{2}(\.[a-z])?\.jsonl$")
+
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_SCHEMA = os.path.join(REPO_ROOT, "schema", "recipe.schema.json")
@@ -110,7 +113,7 @@ def iter_jsonl_files(paths):
     for p in paths:
         if os.path.isdir(p):
             for name in sorted(os.listdir(p)):
-                if name.endswith(".jsonl"):
+                if SHARD_NAME_RE.match(name):
                     yield os.path.join(p, name)
         elif os.path.isfile(p):
             yield p
@@ -121,8 +124,8 @@ def iter_jsonl_files(paths):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("paths", nargs="*", default=[os.path.join(REPO_ROOT, "data", "recipes")],
-                    help="Shard directory or .jsonl files (default: data/recipes/)")
+    ap.add_argument("paths", nargs="*", default=[os.path.join(REPO_ROOT, "data", "shards")],
+                    help="Shard directory or .jsonl files (default: data/shards/)")
     ap.add_argument("--schema", default=DEFAULT_SCHEMA)
     ap.add_argument("--no-layout-check", action="store_true",
                     help="Skip shard-name/sort-order checks (schema only)")
@@ -133,7 +136,7 @@ def main(argv=None):
     bad = 0
     warnings = 0
 
-    for path in iter_jsonl_files(args.paths or [os.path.join(REPO_ROOT, "data", "recipes")]):
+    for path in iter_jsonl_files(args.paths or [os.path.join(REPO_ROOT, "data", "shards")]):
         shard_key = os.path.splitext(os.path.basename(path))[0]
         # per-crawler shards are <prefix>.<crawler>.jsonl (e.g. ab.a.jsonl);
         # the layout check uses the 2-char prefix either way
