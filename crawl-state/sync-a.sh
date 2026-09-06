@@ -10,6 +10,8 @@ while true; do
   cp -f "$WORK/state/status.json" crawl-state/status-a.json 2>/dev/null
   cp -f "$WORK/manifest.txt" crawl-state/manifest-a.txt 2>/dev/null
   for f in data/shards/*.a.jsonl; do [ -f "$f" ] && LC_ALL=C sort -u -o "$f" "$f"; done
+  python3 tools/validate.py data/shards >> "$WORK/logs/validate.log" 2>&1
+  for f in data/shards/*.a.jsonl; do [ -f "$f" ] && LC_ALL=C sort -u -o "$f" "$f"; done
   git add -A
   if ! git diff --cached --quiet; then
     n=$(wc -l < "$WORK/state/done.log" 2>/dev/null || echo 0)
