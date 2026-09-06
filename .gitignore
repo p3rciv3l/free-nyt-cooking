@@ -2,3 +2,5 @@ db/
 .cache/
 __pycache__/
 *.pyc
+data/raw/
+*.html.gz
