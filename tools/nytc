@@ -1,0 +1,609 @@
+#!/usr/bin/env python3
+"""nytc - query CLI for the free-nyt-cooking recipe database.
+
+Python 3 stdlib only. Every subcommand prints JSON to stdout and nothing
+else; errors go to stderr with a non-zero exit code.
+
+List commands (search/filter/random/similar/top) print a JSON array of
+summary rows (the recipe_summary view). `get` and `export` print full
+canonical records, one JSON object per line. See TOOLS.md.
+"""
+import argparse
+import json
+import os
+import random  # noqa: F401  (reserved; randomness via ORDER BY RANDOM())
+import re
+import sqlite3
+import sys
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_DB = os.path.join(REPO_ROOT, "db", "recipes.db")
+
+SUMMARY_FIELDS = ["slug", "name", "author", "url", "total_minutes",
+                  "servings_min", "servings_max", "calories", "protein_g",
+                  "carbohydrates_g", "fat_g", "nutrition_source",
+                  "rating_average", "rating_count", "published_at"]
+
+SORTABLE = {"rating": "rating_average", "rating_count": "rating_count",
+            "calories": "calories", "protein_g": "protein_g",
+            "total_minutes": "total_minutes", "published_at": "published_at"}
+DEFAULT_DESC = {"rating_average", "rating_count", "calories", "protein_g",
+                "published_at"}
+
+NUMERIC_COLS = {"servings_min", "servings_max", "prep_minutes", "cook_minutes",
+                "total_minutes", "calories", "protein_g", "carbohydrates_g",
+                "fat_g", "saturated_fat_g", "unsaturated_fat_g", "trans_fat_g",
+                "cholesterol_mg", "sodium_mg", "fiber_g", "sugar_g",
+                "rating_average", "rating_count", "comment_count"}
+PER_SERVING_COLS = {"calories", "protein_g", "carbohydrates_g", "fat_g",
+                    "saturated_fat_g", "unsaturated_fat_g", "trans_fat_g",
+                    "cholesterol_mg", "sodium_mg", "fiber_g", "sugar_g"}
+
+TAG_CATEGORIES = ("cuisine", "diet", "course", "meal", "occasion", "other")
+
+
+def die(msg, code=2):
+    print("nytc: error: %s" % msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def connect(db_path):
+    if not os.path.exists(db_path):
+        die("database not found at %s - rebuild it with: python3 tools/build_db.py"
+            % db_path)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def like_escape(value):
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def build_filters(conn, args):
+    """Shared filter flags -> (WHERE clause, params). ANDed together."""
+    where = []
+    params = []
+
+    for category, values in (("cuisine", args.cuisine), ("diet", args.diet),
+                             ("course", args.course)):
+        if values:
+            placeholders = ",".join("?" for _ in values)
+            where.append("""EXISTS (SELECT 1 FROM tags t
+                            WHERE t.slug = r.slug AND t.category = ?
+                              AND t.tag IN (%s))""" % placeholders)
+            params.extend([category] + [v.lower() for v in values])
+
+    if args.author:
+        exact = conn.execute("SELECT 1 FROM recipes WHERE author = ? LIMIT 1",
+                             (args.author,)).fetchone()
+        if exact:
+            where.append("r.author = ?")
+            params.append(args.author)
+        else:
+            where.append("LOWER(r.author) LIKE ? ESCAPE '\\'")
+            params.append("%" + like_escape(args.author.lower()) + "%")
+
+    for value in args.include_ingredient or []:
+        where.append("""EXISTS (SELECT 1 FROM ingredients i
+                        WHERE i.slug = r.slug
+                          AND LOWER(i.item) LIKE ? ESCAPE '\\')""")
+        params.append("%" + like_escape(value.lower()) + "%")
+    for value in args.exclude_ingredient or []:
+        where.append("""NOT EXISTS (SELECT 1 FROM ingredients i
+                        WHERE i.slug = r.slug
+                          AND LOWER(i.item) LIKE ? ESCAPE '\\')""")
+        params.append("%" + like_escape(value.lower()) + "%")
+
+    if args.min_total_minutes is not None:
+        where.append("r.total_minutes IS NOT NULL AND r.total_minutes >= ?")
+        params.append(args.min_total_minutes)
+    if args.max_total_minutes is not None:
+        where.append("r.total_minutes IS NOT NULL AND r.total_minutes <= ?")
+        params.append(args.max_total_minutes)
+
+    if args.min_servings is not None:
+        where.append("COALESCE(r.servings_max, r.servings_min) >= ?")
+        params.append(args.min_servings)
+    if args.max_servings is not None:
+        where.append("COALESCE(r.servings_min, r.servings_max) <= ?")
+        params.append(args.max_servings)
+
+    for col, lo, hi in (("calories", args.cal_min, args.cal_max),
+                        ("protein_g", args.protein_min, args.protein_max),
+                        ("carbohydrates_g", args.carbs_min, args.carbs_max),
+                        ("fat_g", args.fat_min, args.fat_max)):
+        if lo is not None:
+            where.append("r.%s IS NOT NULL AND r.%s >= ?" % (col, col))
+            params.append(lo)
+        if hi is not None:
+            where.append("r.%s IS NOT NULL AND r.%s <= ?" % (col, col))
+            params.append(hi)
+
+    if args.min_rating is not None:
+        where.append("r.rating_average >= ?")
+        params.append(args.min_rating)
+    if args.min_rating_count is not None:
+        where.append("r.rating_count >= ?")
+        params.append(args.min_rating_count)
+    if args.nutrition_source:
+        where.append("r.nutrition_source = ?")
+        params.append(args.nutrition_source)
+    if args.published_since:
+        where.append("r.published_at >= ?")
+        params.append(args.published_since)
+    if args.published_until:
+        where.append("r.published_at <= ?")
+        params.append(args.published_until)
+
+    clause = (" WHERE " + " AND ".join("(%s)" % w for w in where)) if where else ""
+    return clause, params
+
+
+def order_by_from_sort(sort):
+    """--sort FIELD, '-' prefix = descending. NULLs always last."""
+    if not sort:
+        return ""
+    desc = sort.startswith("-")
+    field = sort.lstrip("-")
+    col = SORTABLE.get(field, field if field in NUMERIC_COLS else None)
+    if col is None:
+        die("unknown --sort field %r (sortable: %s)"
+            % (field, ", ".join(sorted(SORTABLE))))
+    if not desc:
+        desc = col in DEFAULT_DESC
+    return " ORDER BY (r.%s IS NULL), r.%s %s" % (col, col, "DESC" if desc else "ASC")
+
+
+def project(row, fields):
+    if not fields:
+        return row
+    keep = [f.strip() for f in fields.split(",") if f.strip()]
+    return {k: row[k] for k in keep if k in row}
+
+
+def summary_rows(cursor, args, extra=()):
+    out = []
+    for row in cursor:
+        d = {k: row[k] for k in SUMMARY_FIELDS}
+        for k in extra:
+            if k in row.keys():
+                d[k] = row[k]
+        out.append(project(d, args.fields))
+    return out
+
+
+def full_record(conn, slug):
+    r = conn.execute("SELECT * FROM recipes WHERE slug = ?", (slug,)).fetchone()
+    if r is None:
+        return None
+    ingredients = [dict(position=i["position"], raw=i["raw"], group=i["grp"],
+                        quantity=i["quantity"], quantity_max=i["quantity_max"],
+                        unit=i["unit"], item=i["item"], preparation=i["preparation"],
+                        optional=bool(i["optional"]))
+                   for i in conn.execute(
+                       "SELECT * FROM ingredients WHERE slug = ? ORDER BY position",
+                       (slug,))]
+    for ing in ingredients:
+        if ing["quantity_max"] is None:
+            del ing["quantity_max"]
+    steps = [dict(position=s["position"], text=s["text"])
+             for s in conn.execute(
+                 "SELECT * FROM steps WHERE slug = ? ORDER BY position", (slug,))]
+    tags = {c: [] for c in TAG_CATEGORIES}
+    for t in conn.execute("SELECT category, tag FROM tags WHERE slug = ?"
+                          " ORDER BY category, tag", (slug,)):
+        tags[t["category"]].append(t["tag"])
+    images = [dict(url=i["url"], alt=i["alt"], primary=bool(i["primary_"]))
+              for i in conn.execute("SELECT * FROM images WHERE slug = ?", (slug,))]
+    nutrition = None
+    if r["nutrition_source"]:
+        nutrition = {"source": r["nutrition_source"], "basis": r["nutrition_basis"],
+                     "computed_with": None}
+        for col in PER_SERVING_COLS:
+            nutrition[col] = r[col]
+    rating = None
+    if r["rating_average"] is not None or r["rating_count"] is not None:
+        rating = {"average": r["rating_average"], "count": r["rating_count"] or 0}
+    return {
+        "slug": r["slug"], "nyt_id": r["nyt_id"], "url": r["url"],
+        "name": r["name"], "author": r["author"], "description": r["description"],
+        "servings": {"text": r["servings_text"], "min": r["servings_min"],
+                     "max": r["servings_max"], "yield_type": r["yield_type"]},
+        # time.raw strings live only in the canonical JSONL; the db stores minutes.
+        "time": {"prep_minutes": r["prep_minutes"], "cook_minutes": r["cook_minutes"],
+                 "total_minutes": r["total_minutes"], "raw": {}},
+        "ingredients": ingredients, "steps": steps, "nutrition": nutrition,
+        "tags": tags, "images": images, "rating": rating,
+        "video_url": r["video_url"], "comment_count": r["comment_count"],
+        "published_at": r["published_at"], "scraped_at": r["scraped_at"],
+        "scraper_version": r["scraper_version"],
+    }
+
+
+def print_full_records(conn, slugs, fields=None):
+    for slug in slugs:
+        rec = full_record(conn, slug)
+        if rec is None:
+            print("nytc: warning: no recipe with slug %r" % slug, file=sys.stderr)
+            continue
+        if fields:
+            keep = [f.strip() for f in fields.split(",") if f.strip()]
+            rec = {k: v for k, v in rec.items() if k in keep}
+        print(json.dumps(rec, ensure_ascii=False))
+
+
+def fts_query(text):
+    """Pass the user string through as FTS5; bare words are ANDed by FTS5."""
+    return text
+
+
+def fts_fallback_query(text):
+    """Quote every token/phrase so arbitrary text cannot break FTS5 syntax."""
+    tokens = re.findall(r'"[^"]*"|\S+', text)
+    safe = []
+    for tok in tokens:
+        if tok.startswith('"') and tok.endswith('"') and len(tok) > 1:
+            safe.append(tok)
+        else:
+            safe.append('"' + tok.replace('"', "") + '"')
+    return " ".join(safe)
+
+
+def add_filter_flags(p):
+    p.add_argument("--cuisine", action="append")
+    p.add_argument("--diet", action="append")
+    p.add_argument("--course", action="append")
+    p.add_argument("--author")
+    p.add_argument("--include-ingredient", action="append")
+    p.add_argument("--exclude-ingredient", action="append")
+    p.add_argument("--max-total-minutes", type=int)
+    p.add_argument("--min-total-minutes", type=int)
+    p.add_argument("--min-servings", type=int)
+    p.add_argument("--max-servings", type=int)
+    p.add_argument("--cal-min", type=float)
+    p.add_argument("--cal-max", type=float)
+    p.add_argument("--protein-min", type=float)
+    p.add_argument("--protein-max", type=float)
+    p.add_argument("--carbs-min", type=float)
+    p.add_argument("--carbs-max", type=float)
+    p.add_argument("--fat-min", type=float)
+    p.add_argument("--fat-max", type=float)
+    p.add_argument("--min-rating", type=float)
+    p.add_argument("--min-rating-count", type=int)
+    p.add_argument("--nutrition-source", choices=["nyt", "computed", "mixed"])
+    p.add_argument("--published-since")
+    p.add_argument("--published-until")
+    p.add_argument("--sort")
+
+
+def add_output_flags(p, default_limit=10, max_limit=100):
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--limit", type=int, default=default_limit)
+    p.add_argument("--offset", type=int, default=0)
+    p.add_argument("--fields")
+    p.add_argument("--full", action="store_true")
+    p.set_defaults(_max_limit=max_limit)
+
+
+def check_limit(args):
+    if args.limit < 1 or args.limit > args._max_limit:
+        die("--limit must be 1..%d" % args._max_limit)
+    if args.offset < 0:
+        die("--offset must be >= 0")
+
+
+def emit_rows(conn, args, sql, params, extra=()):
+    if args.full:
+        slugs = [row["slug"] for row in conn.execute(sql, params)]
+        print_full_records(conn, slugs)
+        return
+    cur = conn.execute(sql, params)
+    print(json.dumps(summary_rows(cur, args, extra=extra), ensure_ascii=False))
+
+
+def cmd_get(args):
+    conn = connect(args.db)
+    print_full_records(conn, args.slugs, fields=args.fields)
+
+
+def cmd_search(args):
+    check_limit(args)
+    conn = connect(args.db)
+    clause, params = build_filters(conn, args)
+    text = args.text or ""
+    if text.strip():
+        base = ("FROM recipes r JOIN recipes_fts f ON f.rowid = r.rowid"
+                " WHERE recipes_fts MATCH ?" + (" AND " + clause[len(" WHERE "):] if clause else ""))
+        query = fts_query(text)
+        try:
+            conn.execute("SELECT r.rowid %s LIMIT 0" % base, [query] + params).fetchall()
+        except sqlite3.OperationalError:
+            query = fts_fallback_query(text)
+        order = order_by_from_sort(args.sort) or " ORDER BY bm25(recipes_fts)"
+        sql = ("SELECT r.*, -bm25(recipes_fts) AS score %s%s LIMIT ? OFFSET ?"
+               % (base, order))
+        emit_rows(conn, args, sql, [query] + params + [args.limit, args.offset],
+                  extra=("score",))
+    else:
+        order = order_by_from_sort(args.sort) or " ORDER BY r.rating_count IS NULL, r.rating_count DESC"
+        sql = ("SELECT r.* FROM recipes r%s%s LIMIT ? OFFSET ?"
+               % (clause, order))
+        emit_rows(conn, args, sql, params + [args.limit, args.offset])
+
+
+def cmd_filter(args):
+    check_limit(args)
+    conn = connect(args.db)
+    clause, params = build_filters(conn, args)
+    order = order_by_from_sort(args.sort) or " ORDER BY r.rating_count IS NULL, r.rating_count DESC"
+    sql = "SELECT r.* FROM recipes r%s%s LIMIT ? OFFSET ?" % (clause, order)
+    emit_rows(conn, args, sql, params + [args.limit, args.offset])
+
+
+def cmd_random(args):
+    if args.n < 1 or args.n > 20:
+        die("--n must be 1..20")
+    conn = connect(args.db)
+    clause, params = build_filters(conn, args)
+    sql = "SELECT r.* FROM recipes r%s ORDER BY RANDOM() LIMIT ?" % clause
+    emit_rows(conn, args, sql, params + [args.n])
+
+
+def cmd_similar(args):
+    if args.n < 1 or args.n > 50:
+        die("--n must be 1..50")
+    conn = connect(args.db)
+    if not conn.execute("SELECT 1 FROM recipes WHERE slug = ?",
+                        (args.slug,)).fetchone():
+        die("no recipe with slug %r" % args.slug)
+    clause, params = build_filters(conn, args)
+    # shared-tag count + shared-ingredient Jaccard over ingredients.item,
+    # ties broken by rating. Positional params: slug placeholders first (in
+    # textual order), then filter params, then limit.
+    sql = """
+      WITH tgt_tags AS (SELECT category, tag FROM tags WHERE slug = ?),
+           tgt_ing  AS (SELECT DISTINCT item FROM ingredients WHERE slug = ?),
+           tgt_n    AS (SELECT COUNT(*) AS n FROM tgt_ing),
+           cand AS (
+             SELECT r.slug,
+                    (SELECT COUNT(*) FROM tags t JOIN tgt_tags tt
+                       ON t.category = tt.category AND t.tag = tt.tag
+                      WHERE t.slug = r.slug) AS shared_tags,
+                    (SELECT COUNT(*) FROM ingredients i JOIN tgt_ing ti
+                       ON i.item = ti.item WHERE i.slug = r.slug) AS shared_ing,
+                    (SELECT COUNT(DISTINCT item) FROM ingredients
+                      WHERE slug = r.slug) AS ing_n
+             FROM recipes r
+             WHERE r.slug != ?)
+      SELECT r.*,
+             ROUND(c.shared_tags
+                   + CAST(c.shared_ing AS REAL)
+                     / MAX(1, (SELECT n FROM tgt_n) + c.ing_n - c.shared_ing),
+                   4) AS similarity
+      FROM cand c JOIN recipes r ON r.slug = c.slug
+      WHERE (c.shared_tags > 0 OR c.shared_ing > 0)
+    """
+    if clause:
+        sql += " AND " + clause[len(" WHERE "):]
+    sql += (" ORDER BY similarity DESC, (r.rating_average IS NULL),"
+            " r.rating_average DESC LIMIT ?")
+    emit_rows(conn, args, sql, [args.slug] * 3 + params + [args.n],
+              extra=("similarity",))
+
+
+def cmd_top(args):
+    if args.n < 1 or args.n > 100:
+        die("--n must be 1..100")
+    conn = connect(args.db)
+    by = args.by
+    asc = by.startswith("-") or getattr(args, "asc", False)
+    col = by.lstrip("-")
+    col = SORTABLE.get(col, col)
+    if col not in NUMERIC_COLS:
+        die("unknown --by column %r (numeric columns: %s)"
+            % (args.by, ", ".join(sorted(NUMERIC_COLS))))
+    if args.per_recipe and col in PER_SERVING_COLS:
+        value = ("CASE WHEN r.nutrition_basis = 'per_serving'"
+                 " AND r.servings_max IS NOT NULL"
+                 " THEN r.%s * r.servings_max ELSE NULL END" % col)
+    else:
+        value = "r.%s" % col
+    clause, params = build_filters(conn, args)
+    sql = ("SELECT r.*, %s AS value FROM recipes r%s"
+           " ORDER BY (value IS NULL), value %s LIMIT ?"
+           % (value, clause, "ASC" if asc else "DESC"))
+    emit_rows(conn, args, sql, params + [args.n], extra=("value",))
+
+
+def cmd_tags(args):
+    conn = connect(args.db)
+    where, params = [], []
+    if args.category:
+        where.append("category = ?")
+        params.append(args.category)
+    if args.prefix:
+        where.append("tag LIKE ? ESCAPE '\\'")
+        params.append(like_escape(args.prefix.lower()) + "%")
+    sql = ("SELECT category, tag, COUNT(*) AS recipes FROM tags"
+           + (" WHERE " + " AND ".join(where) if where else "")
+           + " GROUP BY category, tag ORDER BY category, recipes DESC, tag LIMIT ?")
+    params.append(args.limit)
+    rows = [dict(category=r["category"], tag=r["tag"], recipes=r["recipes"])
+            for r in conn.execute(sql, params)]
+    print(json.dumps(rows, ensure_ascii=False))
+
+
+def cmd_ingredients(args):
+    conn = connect(args.db)
+    sql = ("SELECT item, COUNT(*) AS recipes FROM ingredients"
+           " WHERE LOWER(item) LIKE ? ESCAPE '\\'"
+           " GROUP BY item ORDER BY recipes DESC, item LIMIT ?")
+    rows = [dict(item=r["item"], recipes=r["recipes"])
+            for r in conn.execute(
+                sql, ("%" + like_escape(args.substring.lower()) + "%", args.limit))]
+    print(json.dumps(rows, ensure_ascii=False))
+
+
+def cmd_authors(args):
+    conn = connect(args.db)
+    where, params = "", []
+    if args.prefix:
+        where = " WHERE LOWER(author) LIKE ? ESCAPE '\\'"
+        params.append(like_escape(args.prefix.lower()) + "%")
+    sql = ("SELECT author, COUNT(*) AS recipes FROM recipes" + where
+           + " GROUP BY author ORDER BY recipes DESC, author LIMIT ?")
+    params.append(args.limit)
+    rows = [dict(author=r["author"], recipes=r["recipes"])
+            for r in conn.execute(sql, params)]
+    print(json.dumps(rows, ensure_ascii=False))
+
+
+def cmd_stats(args):
+    conn = connect(args.db)
+    def q(sql, params=()):
+        return conn.execute(sql, params).fetchone()[0]
+    recipes = q("SELECT COUNT(*) FROM recipes")
+    rated = q("SELECT COUNT(*) FROM recipes WHERE rating_average IS NOT NULL")
+    null_rates = {}
+    for col in sorted(PER_SERVING_COLS):
+        null_rates[col] = round(
+            q("SELECT COUNT(*) FROM recipes WHERE %s IS NULL" % col) / max(recipes, 1), 4)
+    buckets = {
+        "4.5_to_5": q("SELECT COUNT(*) FROM recipes WHERE rating_average >= 4.5"),
+        "4_to_4.5": q("SELECT COUNT(*) FROM recipes WHERE rating_average >= 4 AND rating_average < 4.5"),
+        "3_to_4": q("SELECT COUNT(*) FROM recipes WHERE rating_average >= 3 AND rating_average < 4"),
+        "0_to_3": q("SELECT COUNT(*) FROM recipes WHERE rating_average < 3"),
+        "unrated": recipes - rated,
+    }
+    coverage = {}
+    for src in ("nyt", "computed", "mixed"):
+        coverage[src] = round(
+            q("SELECT COUNT(*) FROM recipes WHERE nutrition_source = ?", (src,))
+            / max(recipes, 1), 4)
+    coverage["none"] = round(
+        q("SELECT COUNT(*) FROM recipes WHERE nutrition_source IS NULL") / max(recipes, 1), 4)
+    pub = conn.execute("SELECT MIN(published_at), MAX(published_at) FROM recipes"
+                       " WHERE published_at IS NOT NULL").fetchone()
+    stats = {
+        "recipes": recipes,
+        "authors": q("SELECT COUNT(DISTINCT author) FROM recipes WHERE author != ''"),
+        "ingredient_rows": q("SELECT COUNT(*) FROM ingredients"),
+        "distinct_ingredients": q("SELECT COUNT(DISTINCT item) FROM ingredients"),
+        "steps": q("SELECT COUNT(*) FROM steps"),
+        "tag_rows": q("SELECT COUNT(*) FROM tags"),
+        "distinct_tags": q("SELECT COUNT(DISTINCT category || ':' || tag) FROM tags"),
+        "images": q("SELECT COUNT(*) FROM images"),
+        "nutrition_coverage": coverage,
+        "nutrition_null_rates": null_rates,
+        "rating": {
+            "rated": rated,
+            "rated_fraction": round(rated / max(recipes, 1), 4),
+            "mean_of_averages": conn.execute(
+                "SELECT ROUND(AVG(rating_average), 3) FROM recipes"
+                " WHERE rating_average IS NOT NULL").fetchone()[0],
+            "distribution": buckets,
+        },
+        "with_total_minutes_fraction": round(
+            q("SELECT COUNT(*) FROM recipes WHERE total_minutes IS NOT NULL")
+            / max(recipes, 1), 4),
+        "published_range": [pub[0], pub[1]],
+    }
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+
+def cmd_export(args):
+    if args.format != "jsonl":
+        die("--format must be jsonl (the only supported export format)")
+    check_limit(args)
+    conn = connect(args.db)
+    clause, params = build_filters(conn, args)
+    order = order_by_from_sort(args.sort) or " ORDER BY r.slug"
+    sql = "SELECT r.slug FROM recipes r%s%s LIMIT ? OFFSET ?" % (clause, order)
+    slugs = [row["slug"] for row in conn.execute(sql, params + [args.limit, args.offset])]
+    print_full_records(conn, slugs)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="nytc", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("get", help="full canonical record(s) by slug, one JSON object per line")
+    p.add_argument("slugs", nargs="+")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--fields")
+    p.set_defaults(func=cmd_get)
+
+    p = sub.add_parser("search", help="FTS5 text search + structured filters")
+    p.add_argument("text")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.set_defaults(func=cmd_search)
+
+    p = sub.add_parser("filter", help="structured filters only, no text")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.set_defaults(func=cmd_filter)
+
+    p = sub.add_parser("random", help="uniform random pick among matches")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.add_argument("--n", type=int, default=1)
+    p.set_defaults(func=cmd_random)
+
+    p = sub.add_parser("similar", help="recipes most similar to a slug")
+    p.add_argument("slug")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.add_argument("--n", type=int, default=5)
+    p.set_defaults(func=cmd_similar)
+
+    p = sub.add_parser("top", help="leaderboard over a numeric column")
+    p.add_argument("--by", required=True,
+                   help="numeric column; '-' prefix = ascending (lowest first)")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.add_argument("--n", type=int, default=10)
+    p.add_argument("--asc", action="store_true",
+                   help="ascending order (same as '-' prefix on --by)")
+    p.add_argument("--per-recipe", action="store_true",
+                   help="multiply per-serving nutrition by servings_max")
+    p.set_defaults(func=cmd_top)
+
+    p = sub.add_parser("tags", help="tag vocabulary with recipe counts")
+    p.add_argument("--category", choices=list(TAG_CATEGORIES))
+    p.add_argument("--prefix")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_tags)
+
+    p = sub.add_parser("ingredients", help="ingredient item vocabulary with counts")
+    p.add_argument("substring")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_ingredients)
+
+    p = sub.add_parser("authors", help="authors with recipe counts")
+    p.add_argument("--prefix")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_authors)
+
+    p = sub.add_parser("stats", help="dataset overview")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.set_defaults(func=cmd_stats)
+
+    p = sub.add_parser("export", help="full records for a filtered subset, one per line")
+    add_filter_flags(p)
+    add_output_flags(p)
+    p.add_argument("--format", default="jsonl")
+    p.set_defaults(func=cmd_export)
+
+    args = ap.parse_args(argv)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

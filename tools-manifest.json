@@ -1,0 +1,87 @@
+{
+  "manifest_version": "1.0.0",
+  "binary": "tools/nytc",
+  "defaults": { "db": "db/recipes.db", "limit": 10, "output": "json" },
+  "tools": [
+    {
+      "name": "get",
+      "command": "nytc get <slug>...",
+      "description": "Fetch full canonical recipe records by slug, one JSON object per line.",
+      "parameters": {
+        "type": "object",
+        "required": ["slugs"],
+        "properties": {
+          "slugs":  { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "fields": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "name": "search",
+      "command": "nytc search \"<text>\" [filters]",
+      "description": "Full-text search over name, description, ingredients, and steps, combined with structured filters. Returns summary rows with a relevance score.",
+      "parameters": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string", "description": "FTS5 query; bare words are ANDed, quote phrases. Empty string = filter-only." },
+          "cuisine": { "type": "array", "items": { "type": "string" } },
+          "diet": { "type": "array", "items": { "type": "string" } },
+          "course": { "type": "array", "items": { "type": "string" } },
+          "author": { "type": "string" },
+          "include_ingredient": { "type": "array", "items": { "type": "string" } },
+          "exclude_ingredient": { "type": "array", "items": { "type": "string" } },
+          "min_total_minutes": { "type": "integer" },
+          "max_total_minutes": { "type": "integer" },
+          "min_servings": { "type": "integer" },
+          "max_servings": { "type": "integer" },
+          "cal_min": { "type": "number" }, "cal_max": { "type": "number" },
+          "protein_min": { "type": "number" }, "protein_max": { "type": "number" },
+          "carbs_min": { "type": "number" }, "carbs_max": { "type": "number" },
+          "fat_min": { "type": "number" }, "fat_max": { "type": "number" },
+          "min_rating": { "type": "number", "minimum": 0, "maximum": 5 },
+          "min_rating_count": { "type": "integer" },
+          "nutrition_source": { "type": "string", "enum": ["nyt", "computed", "mixed"] },
+          "published_since": { "type": "string" },
+          "published_until": { "type": "string" },
+          "sort": { "type": "string" },
+          "limit": { "type": "integer", "default": 10, "maximum": 100 },
+          "offset": { "type": "integer", "default": 0 },
+          "fields": { "type": "array", "items": { "type": "string" } },
+          "full": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    { "name": "filter", "command": "nytc filter [filters]",
+      "description": "Structured filter with no text query. Same parameters as search minus `text`." },
+    { "name": "random", "command": "nytc random [filters] [--n 1]",
+      "description": "Uniform random pick among recipes matching the filters.",
+      "parameters": { "type": "object", "properties": {
+          "n": { "type": "integer", "default": 1, "maximum": 20 } },
+        "additionalProperties": "inherits search filters" } },
+    { "name": "similar", "command": "nytc similar <slug> [--n 5]",
+      "description": "Recipes most similar to the given slug by shared tags and shared ingredients.",
+      "parameters": { "type": "object", "required": ["slug"], "properties": {
+          "slug": { "type": "string" },
+          "n": { "type": "integer", "default": 5, "maximum": 50 } },
+        "additionalProperties": "inherits search filters" } },
+    { "name": "top", "command": "nytc top --by <column> [filters] [--n 10] [--asc] [--per-recipe]",
+      "description": "Leaderboard over a numeric column (macros, rating, time). Descending by default; '--by=-col' or --asc for lowest-first. NULLs sort last.",
+      "parameters": { "type": "object", "required": ["by"], "properties": {
+          "by": { "type": "string" },
+          "n": { "type": "integer", "default": 10 },
+          "asc": { "type": "boolean", "default": false },
+          "per_recipe": { "type": "boolean", "default": false } },
+        "additionalProperties": "inherits search filters" } },
+    { "name": "tags", "command": "nytc tags [--category c] [--prefix p]",
+      "description": "List all tags with recipe counts, optionally narrowed to one category." },
+    { "name": "ingredients", "command": "nytc ingredients \"<substring>\"",
+      "description": "List distinct ingredient item names with counts, for canonical spelling before include/exclude filters." },
+    { "name": "authors", "command": "nytc authors [--prefix p]",
+      "description": "List authors with recipe counts." },
+    { "name": "stats", "command": "nytc stats",
+      "description": "Dataset overview: counts, coverage, null rates, rating distribution." },
+    { "name": "export", "command": "nytc export [filters] --format jsonl",
+      "description": "Full canonical records for a filtered subset, one JSON object per line. Honors --limit/--offset." }
+  ]
+}
