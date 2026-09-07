@@ -23,3 +23,6 @@
 {"url": "https://cooking.nytimes.com/recipes/1013944-pappardelle-with-beets-beet-greens-and-goat-cheese", "nyt_id": "1013944", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:05:07Z"}
 {"url": "https://cooking.nytimes.com/recipes/1014460-blowout", "nyt_id": "1014460", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:18:08Z"}
 {"url": "https://cooking.nytimes.com/recipes/1014820-grilled-scallops-with-olive-oil-and-lemon", "nyt_id": "1014820", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:27:49Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015058-pasta-with-sausage", "nyt_id": "1015058", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:20Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015061-barbecue", "nyt_id": "1015061", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:25Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015066-dip", "nyt_id": "1015066", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:31Z"}
