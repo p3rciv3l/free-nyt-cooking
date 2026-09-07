@@ -1,35 +1,28 @@
 # free-nyt-cooking
 
-Every recipe on NYT Cooking as a local, queryable dataset: 25,418 recipes
-scraped from cooking.nytimes.com, stored as JSONL with a SQLite query db and
-a small CLI on top.
+Every NYT cooking recipe, made easily queryable. Tell your agent to look at TOOLS.md when searching the DB.
 
-## What's inside
+https://github.com/user-attachments/assets/3e373ce6-6ed4-4726-a3a4-be7d686009c4
 
-- `data/shards/` - the canonical data. 286 JSONL shards, one JSON object per
-  recipe, sharded by the first 2 characters of the slug. Records are keyed by
-  NYT's recipe id (`nyt_id`); NYT reuses some slugs for different recipes, so
-  slug alone is not unique.
-- `db/recipes.db` - derived SQLite db with indexes and full-text search.
-  Gitignored; rebuild from the shards in under a minute.
-- `tools/nytc` - query CLI (Python 3, stdlib only, JSON output): search,
-  filter, similar, top-by-macro, random, export.
-- Docs: `SCHEMA.md` (record fields), `DATA-LAYOUT.md` (repo layout),
-  `TOOLS.md` (CLI reference), `AGENTS.md` (agent quickstart),
-  `tools-manifest.json` (machine-readable CLI surface).
+25,418 recipes as JSONL shards under `data/shards/` (keyed by `nyt_id`), with a
+SQLite db and the `tools/nytc` CLI on top. Each record carries name, author,
+ingredients, steps, times, servings, tags, per-serving nutrition, rating, image
+URLs, and the source URL.
 
-## Quick start
+## Suggested queries
 
 ```bash
-python3 tools/build_db.py        # builds db/recipes.db from data/shards/
-tools/nytc search "miso chicken" --max-total-minutes 45
-tools/nytc top --by protein_g --diet vegetarian --n 10
-tools/nytc get pumpkin-creme-brulee     # full record; accepts slug or nyt_id
+python3 tools/build_db.py   # one-time setup: builds db/recipes.db from the shards (<1 min)
 ```
 
-Each record carries name, author, ingredients, steps, times, servings, tags,
-per-serving nutrition (94.5% published by NYT), a rating snapshot, image URLs,
-and the source URL.
+- `tools/nytc stats` - dataset overview: recipe, tag, and nutrition coverage counts.
+- `tools/nytc search "miso chicken" --max-total-minutes 45` - full-text search with structured filters.
+- `tools/nytc filter --diet vegetarian --course dinner --max-total-minutes 30` - structured-only query, no text.
+- `tools/nytc top --by protein_g --diet vegetarian --n 10` - leaderboard over any numeric field.
+- `tools/nytc similar pumpkin-creme-brulee --n 5` - recipes most similar to a given one.
+- `tools/nytc get marcella-hazan-tomato-sauce` - full record (ingredients and steps); accepts slug or nyt_id.
+
+Full CLI reference: [TOOLS.md](TOOLS.md).
 
 ## How the data was sourced
 
