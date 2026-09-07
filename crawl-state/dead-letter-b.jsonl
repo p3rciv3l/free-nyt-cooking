@@ -18,3 +18,8 @@
 {"url": "https://cooking.nytimes.com/recipes/12627-in-foil-with-fish", "nyt_id": "12627", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:14:25-0400"}
 {"url": "https://cooking.nytimes.com/recipes/12640-indirect-grill-rounds-parmesan-and-bread-crumbs", "nyt_id": "12640", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:14:49-0400"}
 {"url": "https://cooking.nytimes.com/recipes/12641-indirect-grill-halves-with-herbs", "nyt_id": "12641", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:14:52-0400"}
+{"url": "https://cooking.nytimes.com/recipes/12808-jicama", "nyt_id": "12808", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:20:56-0400"}
+{"url": "https://cooking.nytimes.com/recipes/12832-fish", "nyt_id": "12832", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:21:52-0400"}
+{"url": "https://cooking.nytimes.com/recipes/12835-candied-bacon", "nyt_id": "12835", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:21:55-0400"}
+{"url": "https://cooking.nytimes.com/recipes/12845-potato-chowder", "nyt_id": "12845", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:22:16-0400"}
+{"url": "https://cooking.nytimes.com/recipes/1425-pasta-with-vodka-sauce", "nyt_id": "1425", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:33:44-0400"}
