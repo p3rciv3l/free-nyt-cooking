@@ -32,3 +32,4 @@
 {"url": "https://cooking.nytimes.com/recipes/1015749-roasted-lamb-with-jam-chile-and-red-onions", "nyt_id": "1015749", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:17Z"}
 {"url": "https://cooking.nytimes.com/recipes/1015752-stir-fried-lamb-with-asparagus-and-hoisin", "nyt_id": "1015752", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:19Z"}
 {"url": "https://cooking.nytimes.com/recipes/1015753-stir-fried-lamb-with-carrots-and-orange", "nyt_id": "1015753", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:21Z"}
+{"url": "https://cooking.nytimes.com/recipes/1017213-the-james-franco", "nyt_id": "1017213", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T03:33:33Z"}
