@@ -66,3 +66,4 @@
 {"url": "https://cooking.nytimes.com/recipes/1020026-pan-roasted-chicken-with-chiles-de-arbol", "nyt_id": "1020026", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T04:57:49Z"}
 {"url": "https://cooking.nytimes.com/recipes/1020027-rotisserie-chicken-panzanella", "nyt_id": "1020027", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T04:57:51Z"}
 {"url": "https://cooking.nytimes.com/recipes/1020028-sloppy-joes", "nyt_id": "1020028", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T04:57:53Z"}
+{"url": "https://cooking.nytimes.com/recipes/1021956-pork-chops-with-onion-gravy", "nyt_id": "1021956", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T06:29:25Z"}
