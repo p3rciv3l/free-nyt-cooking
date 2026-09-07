@@ -12,3 +12,4 @@
 {"url": "https://cooking.nytimes.com/recipes/1020019-pasta-with-chickpeas-and-a-negroni", "nyt_id": "1020019", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T00:27:57Z"}
 {"url": "https://cooking.nytimes.com/recipes/1020025-rice-and-beans-with-extras", "nyt_id": "1020025", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T00:27:59Z"}
 {"url": "https://cooking.nytimes.com/recipes/1020029-miso-glazed-eggplant-with-a-bowl-of-rice", "nyt_id": "1020029", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T00:28:01Z"}
+{"url": "https://cooking.nytimes.com/recipes/1026604-pesto-pasta-with-white-beans-and-halloumi", "nyt_id": "1026604", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T01:08:43Z"}
