@@ -26,3 +26,9 @@
 {"url": "https://cooking.nytimes.com/recipes/1015058-pasta-with-sausage", "nyt_id": "1015058", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:20Z"}
 {"url": "https://cooking.nytimes.com/recipes/1015061-barbecue", "nyt_id": "1015061", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:25Z"}
 {"url": "https://cooking.nytimes.com/recipes/1015066-dip", "nyt_id": "1015066", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:34:31Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015547-dry-roasted-insects", "nyt_id": "1015547", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:49:03Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015747-roasted-lamb-with-garlic-dill-and-potatoes", "nyt_id": "1015747", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:12Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015748-roasted-lamb-with-cumin-lemon-zest-and-carrots", "nyt_id": "1015748", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:14Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015749-roasted-lamb-with-jam-chile-and-red-onions", "nyt_id": "1015749", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:17Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015752-stir-fried-lamb-with-asparagus-and-hoisin", "nyt_id": "1015752", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:19Z"}
+{"url": "https://cooking.nytimes.com/recipes/1015753-stir-fried-lamb-with-carrots-and-orange", "nyt_id": "1015753", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:54:21Z"}
