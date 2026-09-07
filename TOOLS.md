@@ -37,10 +37,13 @@ Shared filter flags (accepted by `search`, `filter`, `random`, `top`, `similar`)
 
 ## Commands
 
-### `nytc get <slug> [<slug>...]`
+### `nytc get <slug-or-nyt-id> [<slug-or-nyt-id>...]`
 Full canonical record(s), one JSON object per line. The only command family that
 returns ingredients and steps. `--fields` applies (top-level keys).
-Unknown slugs warn on stderr and are skipped.
+A numeric argument is an `nyt_id`; anything else is a slug. NYT reuses a few
+slugs for distinct recipes: a shared slug returns every matching record with a
+stderr note (use the `nyt_id` to pick one). Unknown ids/slugs warn on stderr
+and are skipped.
 
 ### `nytc search "<text>" [filters]`
 FTS5 over name + description + ingredients + steps (porter-stemmed, phrase
@@ -55,9 +58,10 @@ Structured-only query, no text. Summary rows.
 ### `nytc random [filters] [--n 1]`
 Uniform random pick among matches (`--n` max 20).
 
-### `nytc similar <slug> [--n 5]`
+### `nytc similar <slug-or-nyt-id> [--n 5]`
 Ranked by shared-tag count + shared-ingredient Jaccard over `ingredients.item`,
 ties broken by rating. Summary rows plus a `similarity` field (`--n` max 50).
+A shared slug (see `get`) errors and asks for an `nyt_id`.
 
 ### `nytc top --by <column> [filters] [--n 10] [--asc] [--per-recipe]`
 Nutrition/popularity leaderboard. `--by` ∈ `protein_g, calories, fiber_g,

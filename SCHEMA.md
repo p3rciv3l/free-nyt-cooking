@@ -16,8 +16,8 @@ with agents. Field names are identical across both wherever possible.
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
-| `slug` | string | ✓ | Primary key. From the NYT URL: `/recipes/1023456-miso-chicken` → `miso-chicken`. Strip the numeric prefix but keep it in `nyt_id`. Lowercase, `[a-z0-9-]`. |
-| `nyt_id` | integer | ✓ | Numeric recipe id from the URL. Stable upstream key. |
+| `slug` | string | ✓ | From the NYT URL: `/recipes/1023456-miso-chicken` → `miso-chicken`. Lowercase, `[a-z0-9-]` (NYT serves a few capitalized slugs; lowercased at merge, `url` keeps source casing). NOT unique: NYT reuses a small number of slugs for distinct recipes, so `nyt_id` is the key. |
+| `nyt_id` | integer | ✓ | Primary key. Numeric recipe id from the URL. Stable, unique upstream key; every cross-reference (db tables, CLI lookups) uses it. |
 | `url` | string | ✓ | Canonical `https://cooking.nytimes.com/recipes/<nyt_id>-<slug>` |
 | `name` | string | ✓ | Display name as published. |
 | `author` | string | ✓ | Display name, e.g. `"Melissa Clark"`. Empty string if unattributed (NYT has some). |
@@ -217,11 +217,20 @@ Design rules:
   that is what keeps "query without reading whole recipes" true.
 
 ```sql
+-- free-nyt-cooking SQLite query store DDL.
+-- Derived artifact: built only by tools/build_db.py from data/shards/*.jsonl.
+-- Note: recipes carries two denormalized columns (ingredients_text, steps_text)
+-- so the FTS5 external-content table + trigger trio below work unchanged.
+--
+-- Primary key is nyt_id, not slug: NYT reuses a small number of name-slugs
+-- for distinct recipes, so slug is non-unique (indexed) and nyt_id is the
+-- stable cross-reference key everywhere.
+
 PRAGMA journal_mode = WAL;
 
 CREATE TABLE recipes (
-  slug             TEXT PRIMARY KEY,
-  nyt_id           INTEGER NOT NULL UNIQUE,
+  nyt_id           INTEGER PRIMARY KEY,
+  slug             TEXT NOT NULL,
   url              TEXT NOT NULL,
   name             TEXT NOT NULL,
   author           TEXT NOT NULL DEFAULT '',
@@ -252,9 +261,12 @@ CREATE TABLE recipes (
   video_url        TEXT,
   published_at     TEXT,          -- YYYY-MM-DD
   scraped_at       TEXT NOT NULL,
-  scraper_version  TEXT NOT NULL
+  scraper_version  TEXT NOT NULL,
+  ingredients_text TEXT NOT NULL DEFAULT '',  -- denormalized, feeds FTS
+  steps_text       TEXT NOT NULL DEFAULT ''   -- denormalized, feeds FTS
 );
 
+CREATE INDEX idx_recipes_slug          ON recipes(slug);
 CREATE INDEX idx_recipes_author        ON recipes(author);
 CREATE INDEX idx_recipes_total_minutes ON recipes(total_minutes);
 CREATE INDEX idx_recipes_calories      ON recipes(calories);
@@ -263,7 +275,7 @@ CREATE INDEX idx_recipes_rating        ON recipes(rating_average);
 CREATE INDEX idx_recipes_published     ON recipes(published_at);
 
 CREATE TABLE ingredients (
-  slug        TEXT NOT NULL REFERENCES recipes(slug) ON DELETE CASCADE,
+  nyt_id      INTEGER NOT NULL REFERENCES recipes(nyt_id) ON DELETE CASCADE,
   position    INTEGER NOT NULL,
   raw         TEXT NOT NULL,
   grp         TEXT,
@@ -273,28 +285,28 @@ CREATE TABLE ingredients (
   item        TEXT NOT NULL,     -- include/exclude match key, lowercase
   preparation TEXT,
   optional    INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (slug, position)
+  PRIMARY KEY (nyt_id, position)
 );
 CREATE INDEX idx_ingredients_item ON ingredients(item);
 
 CREATE TABLE steps (
-  slug     TEXT NOT NULL REFERENCES recipes(slug) ON DELETE CASCADE,
+  nyt_id   INTEGER NOT NULL REFERENCES recipes(nyt_id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
   text     TEXT NOT NULL,
-  PRIMARY KEY (slug, position)
+  PRIMARY KEY (nyt_id, position)
 );
 
 CREATE TABLE tags (
-  slug     TEXT NOT NULL REFERENCES recipes(slug) ON DELETE CASCADE,
+  nyt_id   INTEGER NOT NULL REFERENCES recipes(nyt_id) ON DELETE CASCADE,
   category TEXT NOT NULL CHECK (category IN ('cuisine','diet','course','meal','occasion','other')),
   tag      TEXT NOT NULL,
-  PRIMARY KEY (slug, category, tag)
+  PRIMARY KEY (nyt_id, category, tag)
 );
 CREATE INDEX idx_tags_tag      ON tags(tag);
 CREATE INDEX idx_tags_category ON tags(category, tag);
 
 CREATE TABLE images (
-  slug     TEXT NOT NULL REFERENCES recipes(slug) ON DELETE CASCADE,
+  nyt_id   INTEGER NOT NULL REFERENCES recipes(nyt_id) ON DELETE CASCADE,
   url      TEXT NOT NULL,
   alt      TEXT NOT NULL DEFAULT '',
   primary_ INTEGER NOT NULL DEFAULT 0
@@ -306,16 +318,29 @@ CREATE VIRTUAL TABLE recipes_fts USING fts5(
   content='recipes', content_rowid='rowid',
   tokenize='porter unicode61'
 );
--- ingredients_text / steps_text are denormalized concatenations built by
--- build_db.py; kept in sync by AFTER INSERT/UPDATE/DELETE triggers
--- (standard FTS5 external-content trigger trio).
+
+-- Standard FTS5 external-content trigger trio.
+CREATE TRIGGER recipes_ai AFTER INSERT ON recipes BEGIN
+  INSERT INTO recipes_fts(rowid, name, description, ingredients_text, steps_text)
+  VALUES (new.rowid, new.name, new.description, new.ingredients_text, new.steps_text);
+END;
+CREATE TRIGGER recipes_ad AFTER DELETE ON recipes BEGIN
+  INSERT INTO recipes_fts(recipes_fts, rowid, name, description, ingredients_text, steps_text)
+  VALUES ('delete', old.rowid, old.name, old.description, old.ingredients_text, old.steps_text);
+END;
+CREATE TRIGGER recipes_au AFTER UPDATE ON recipes BEGIN
+  INSERT INTO recipes_fts(recipes_fts, rowid, name, description, ingredients_text, steps_text)
+  VALUES ('delete', old.rowid, old.name, old.description, old.ingredients_text, old.steps_text);
+  INSERT INTO recipes_fts(rowid, name, description, ingredients_text, steps_text)
+  VALUES (new.rowid, new.name, new.description, new.ingredients_text, new.steps_text);
+END;
 ```
 
 **Summary view** — the default shape of every list-style tool result:
 
 ```sql
 CREATE VIEW recipe_summary AS
-SELECT slug, name, author, url, total_minutes, servings_min, servings_max,
+SELECT nyt_id, slug, name, author, url, total_minutes, servings_min, servings_max,
        calories, protein_g, carbohydrates_g, fat_g, nutrition_source,
        rating_average, rating_count, published_at
 FROM recipes;

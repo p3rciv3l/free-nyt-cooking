@@ -13,8 +13,8 @@ free-nyt-cooking/
 ├── data/
 │   ├── manifest.json         # dataset-level metadata (see below)
 │   ├── raw/                  # raw HTML cache — GITIGNORED (~7 GB), never pushed
-│   └── shards/               # canonical JSONL shards, git-tracked, sorted by slug
-│       ├── ab.jsonl          # canonical shard: key = first 2 chars of slug
+│   └── shards/               # canonical JSONL shards, git-tracked, sorted by slug,nyt_id
+│       ├── ab.jsonl          # canonical shard: key = first 2 chars of lowercased slug
 │       ├── ab.a.jsonl        # per-crawler shard (crawler A) during crawl
 │       ├── ab.b.jsonl        # per-crawler shard (crawler B) during crawl
 │       └── ...
@@ -41,9 +41,10 @@ free-nyt-cooking/
   raw HTML can be tarballed and attached to a GitHub Release as an asset.
 - **Post-crawl**, `python3 tools/merge_shards.py` unifies per-crawler shards
   into the canonical `<prefix>.jsonl` layout (full-record replace keyed on
-  slug, newest `scraped_at` wins, lines sorted by slug) and removes the
-  per-crawler files.
-- Tooling only reads shard-shaped filenames (`^[a-z0-9]{2}(\.[a-z])?\.jsonl$`);
+  `nyt_id` — NYT reuses a few slugs for distinct recipes, so slug cannot be
+  the key — newest `scraped_at` wins; slugs lowercased; lines sorted by slug,
+  then nyt_id) and removes the per-crawler files.
+- Tooling only reads shard-shaped filenames (`^[a-z0-9-]{1,2}(\.[a-z])?\.jsonl$`);
   checkpoint and dead-letter files in the same directory are ignored by
   `validate.py` and `build_db.py`.
 
@@ -52,13 +53,15 @@ free-nyt-cooking/
 - **JSONL shards are the canonical data.** Human-diffable, append-friendly,
   streamable (`head`, `tail`, `wc -l` all work), and the scraper can rewrite a
   single shard without touching the rest.
-- **Shard by 2-char slug prefix.** ~26k recipes spread over a few hundred shards;
+- **Shard by 2-char slug prefix** (lowercased; 1-char shard for the one
+  single-character slug). ~26k recipes spread over a few hundred shards;
   each shard stays small (typically < 1 MB), git diffs from re-scrapes stay local,
-  and lookup of one record = one shard file. Sort lines by slug within each shard
-  so rebuilds are deterministic and diffs minimal.
+  and lookup of one record = one shard file. Sort lines by slug, then nyt_id,
+  within each shard so rebuilds are deterministic, diffs minimal, and the
+  handful of duplicate slugs stay adjacent.
 - **SQLite is a derived artifact.** Never hand-edit it. `tools/build_db.py` drops
   and rebuilds from the shards; it is idempotent and order-independent (duplicate
-  slugs across shards resolve to the newest `scraped_at`). Gitignore the db and
+  nyt_ids across shards resolve to the newest `scraped_at`). Gitignore the db and
   attach it to GitHub Releases for agents that don't want to build (build is
   < 1 min for the full corpus).
 - **Images are URLs only.** No binary assets in the repo.
@@ -85,7 +88,7 @@ and lets incremental re-scrapes detect drift.
 ## Record lifecycle
 
 1. Scraper writes/updates one line in the shard matching the record's slug
-   (full-record replace keyed on `slug`; never append duplicates).
+   prefix (full-record replace keyed on `nyt_id`; never append duplicates).
 2. `tools/validate.py data/shards/` — every line must pass `recipe.schema.json`.
    CI gate. Records from either parse path (Recipe JSON-LD or the richer
    `__NEXT_DATA__` scoopRecipe object) are held to the same schema — the

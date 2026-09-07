@@ -16,7 +16,7 @@ import re
 import sqlite3
 import sys
 
-SHARD_NAME_RE = re.compile(r"^[a-z0-9]{2}(\.[a-z])?\.jsonl$")
+SHARD_NAME_RE = re.compile(r"^[a-z0-9-]{1,2}(\.[a-z])?\.jsonl$")
 
 from datetime import datetime, timezone
 
@@ -29,8 +29,9 @@ NUTRITION_COLS = ["calories", "protein_g", "carbohydrates_g", "fat_g",
 
 
 def load_records(data_dir):
-    """Return {slug: record} from every shard (*.jsonl, including per-crawler
-    <prefix>.<crawler>.jsonl). Duplicate slugs: newest scraped_at wins."""
+    """Return {nyt_id: record} from every shard (*.jsonl, including per-crawler
+    <prefix>.<crawler>.jsonl). Keyed on nyt_id, not slug: NYT reuses some
+    slugs for distinct recipes. Duplicate nyt_ids: newest scraped_at wins."""
     records = {}
     for name in sorted(os.listdir(data_dir)):
         if not SHARD_NAME_RE.match(name):
@@ -42,9 +43,10 @@ def load_records(data_dir):
                 if not line:
                     continue
                 r = json.loads(line)
-                prev = records.get(r["slug"])
+                key = int(r["nyt_id"])
+                prev = records.get(key)
                 if prev is None or r.get("scraped_at", "") >= prev.get("scraped_at", ""):
-                    records[r["slug"]] = r
+                    records[key] = r
     return records
 
 
@@ -73,7 +75,7 @@ def build(data_dir, db_path):
             steps_text = "\n".join(s.get("text", "") for s in steps)
             conn.execute(
                 """INSERT INTO recipes (
-                     slug, nyt_id, url, name, author, description,
+                     nyt_id, slug, url, name, author, description,
                      servings_text, servings_min, servings_max, yield_type,
                      prep_minutes, cook_minutes, total_minutes,
                      calories, protein_g, carbohydrates_g, fat_g,
@@ -84,7 +86,7 @@ def build(data_dir, db_path):
                      published_at, scraped_at, scraper_version,
                      ingredients_text, steps_text)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (r["slug"], r["nyt_id"], r["url"], r["name"],
+                (r["nyt_id"], r["slug"], r["url"], r["name"],
                  r.get("author", ""), r.get("description", ""),
                  servings.get("text", ""), servings.get("min"), servings.get("max"),
                  servings.get("yield_type", "servings"),
@@ -104,25 +106,25 @@ def build(data_dir, db_path):
             for ing in ingredients:
                 conn.execute(
                     """INSERT INTO ingredients
-                         (slug, position, raw, grp, quantity, quantity_max,
+                         (nyt_id, position, raw, grp, quantity, quantity_max,
                           unit, item, preparation, optional)
                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                    (r["slug"], ing["position"], ing["raw"], ing.get("group"),
+                    (r["nyt_id"], ing["position"], ing["raw"], ing.get("group"),
                      ing.get("quantity"), ing.get("quantity_max"), ing.get("unit"),
                      ing["item"], ing.get("preparation"),
                      1 if ing.get("optional") else 0))
             for st in steps:
-                conn.execute("INSERT INTO steps (slug, position, text) VALUES (?,?,?)",
-                             (r["slug"], st["position"], st["text"]))
+                conn.execute("INSERT INTO steps (nyt_id, position, text) VALUES (?,?,?)",
+                             (r["nyt_id"], st["position"], st["text"]))
             for category, values in (r.get("tags") or {}).items():
                 for tag in values:
                     conn.execute(
-                        "INSERT OR IGNORE INTO tags (slug, category, tag) VALUES (?,?,?)",
-                        (r["slug"], category, tag))
+                        "INSERT OR IGNORE INTO tags (nyt_id, category, tag) VALUES (?,?,?)",
+                        (r["nyt_id"], category, tag))
             for img in r.get("images") or []:
                 conn.execute(
-                    "INSERT INTO images (slug, url, alt, primary_) VALUES (?,?,?,?)",
-                    (r["slug"], img["url"], img.get("alt", ""),
+                    "INSERT INTO images (nyt_id, url, alt, primary_) VALUES (?,?,?,?)",
+                    (r["nyt_id"], img["url"], img.get("alt", ""),
                      1 if img.get("primary") else 0))
             count += 1
     conn.execute("PRAGMA optimize")

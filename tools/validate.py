@@ -16,7 +16,7 @@ import os
 import re
 import sys
 
-SHARD_NAME_RE = re.compile(r"^[a-z0-9]{2}(\.[a-z])?\.jsonl$")
+SHARD_NAME_RE = re.compile(r"^[a-z0-9-]{1,2}(\.[a-z])?\.jsonl$")
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -140,7 +140,7 @@ def main(argv=None):
         shard_key = os.path.splitext(os.path.basename(path))[0]
         # per-crawler shards are <prefix>.<crawler>.jsonl (e.g. ab.a.jsonl);
         # the layout check uses the 2-char prefix either way
-        if re.match(r"^[a-z0-9]{2}\.[a-z]$", shard_key):
+        if re.match(r"^[a-z0-9-]{1,2}\.[a-z]$", shard_key):
             shard_key = shard_key[:2]
         prev_slug = None
         with open(path, encoding="utf-8") as fh:
@@ -160,7 +160,7 @@ def main(argv=None):
                     bad += 1
                     print("%s:%d: %s" % (path, lineno, e), file=sys.stderr)
                 if not args.no_layout_check and not errors:
-                    slug = record.get("slug", "")
+                    slug = record.get("slug", "").lower()
                     if not slug.startswith(shard_key):
                         warnings += 1
                         print("%s:%d: warning: slug %r does not match shard key %r"

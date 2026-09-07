@@ -25,7 +25,7 @@ python3 tools/build_db.py        # rebuilds from data/shards/ in < 1 min
    `nytc authors`.
 2. **Filter/search to a shortlist of summaries** (name, time, macros, rating —
    no full text yet): `nytc search ...` or `nytc filter ...`.
-3. **Fetch full records only for the chosen few**: `nytc get <slug>`.
+3. **Fetch full records only for the chosen few**: `nytc get <slug-or-nyt-id>`.
 
 Never `get` more recipes than you will actually read. Summaries are the cheap
 currency; full records are for final candidates.
@@ -34,11 +34,11 @@ currency; full records are for final candidates.
 
 | You want | Command |
 |---|---|
-| One known recipe, full detail | `nytc get <slug>` |
+| One known recipe, full detail | `nytc get <slug-or-nyt-id>` |
 | Text search + any filters | `nytc search "<text>" [filters]` |
 | Filters only, no text | `nytc filter [filters]` |
 | Surprise me | `nytc random [filters] [--n N]` |
-| More like this one | `nytc similar <slug> [--n N]` |
+| More like this one | `nytc similar <slug-or-nyt-id> [--n N]` |
 | Highest/lowest by a macro or rating | `nytc top --by <col> [filters] [--asc] [--per-recipe]` |
 | Valid tag values | `nytc tags [--category ...]` |
 | Canonical ingredient spelling | `nytc ingredients "<substring>"` |
@@ -66,7 +66,7 @@ currency; full records are for final candidates.
 
 ## Field cheat sheet (summary rows)
 
-`slug, name, author, url, total_minutes, servings_min, servings_max,
+`nyt_id, slug, name, author, url, total_minutes, servings_min, servings_max,
 calories, protein_g, carbohydrates_g, fat_g, nutrition_source,
 rating_average, rating_count, published_at`
 
@@ -112,7 +112,9 @@ nytc get miso-chicken
 - **Ingredient include/exclude matches `item`**, the parsed noun, not the raw
   line. Check spelling with `nytc ingredients` when a match looks wrong.
 - **`author` can be empty** on some recipes.
-- **The slug is the key.** Everything cross-references on it.
+- **`nyt_id` is the key.** Everything cross-references on it. NYT reuses a
+  few slugs for distinct recipes, so slug is not unique; a shared slug in
+  `get` returns all matches, and `similar` asks for an `nyt_id`.
 - **`--by=-calories` needs the `=`** (argparse treats a bare `-calories` as a
   flag); `--asc` does the same thing.
 - **db-reconstructed full records lose `time.raw`** (comes back `{}`) — the

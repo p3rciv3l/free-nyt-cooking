@@ -19,7 +19,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB = os.path.join(REPO_ROOT, "db", "recipes.db")
 
-SUMMARY_FIELDS = ["slug", "name", "author", "url", "total_minutes",
+SUMMARY_FIELDS = ["nyt_id", "slug", "name", "author", "url", "total_minutes",
                   "servings_min", "servings_max", "calories", "protein_g",
                   "carbohydrates_g", "fat_g", "nutrition_source",
                   "rating_average", "rating_count", "published_at"]
@@ -70,7 +70,7 @@ def build_filters(conn, args):
         if values:
             placeholders = ",".join("?" for _ in values)
             where.append("""EXISTS (SELECT 1 FROM tags t
-                            WHERE t.slug = r.slug AND t.category = ?
+                            WHERE t.nyt_id = r.nyt_id AND t.category = ?
                               AND t.tag IN (%s))""" % placeholders)
             params.extend([category] + [v.lower() for v in values])
 
@@ -86,12 +86,12 @@ def build_filters(conn, args):
 
     for value in args.include_ingredient or []:
         where.append("""EXISTS (SELECT 1 FROM ingredients i
-                        WHERE i.slug = r.slug
+                        WHERE i.nyt_id = r.nyt_id
                           AND LOWER(i.item) LIKE ? ESCAPE '\\')""")
         params.append("%" + like_escape(value.lower()) + "%")
     for value in args.exclude_ingredient or []:
         where.append("""NOT EXISTS (SELECT 1 FROM ingredients i
-                        WHERE i.slug = r.slug
+                        WHERE i.nyt_id = r.nyt_id
                           AND LOWER(i.item) LIKE ? ESCAPE '\\')""")
         params.append("%" + like_escape(value.lower()) + "%")
 
@@ -173,8 +173,8 @@ def summary_rows(cursor, args, extra=()):
     return out
 
 
-def full_record(conn, slug):
-    r = conn.execute("SELECT * FROM recipes WHERE slug = ?", (slug,)).fetchone()
+def full_record(conn, nyt_id):
+    r = conn.execute("SELECT * FROM recipes WHERE nyt_id = ?", (nyt_id,)).fetchone()
     if r is None:
         return None
     ingredients = [dict(position=i["position"], raw=i["raw"], group=i["grp"],
@@ -182,20 +182,20 @@ def full_record(conn, slug):
                         unit=i["unit"], item=i["item"], preparation=i["preparation"],
                         optional=bool(i["optional"]))
                    for i in conn.execute(
-                       "SELECT * FROM ingredients WHERE slug = ? ORDER BY position",
-                       (slug,))]
+                       "SELECT * FROM ingredients WHERE nyt_id = ? ORDER BY position",
+                       (nyt_id,))]
     for ing in ingredients:
         if ing["quantity_max"] is None:
             del ing["quantity_max"]
     steps = [dict(position=s["position"], text=s["text"])
              for s in conn.execute(
-                 "SELECT * FROM steps WHERE slug = ? ORDER BY position", (slug,))]
+                 "SELECT * FROM steps WHERE nyt_id = ? ORDER BY position", (nyt_id,))]
     tags = {c: [] for c in TAG_CATEGORIES}
-    for t in conn.execute("SELECT category, tag FROM tags WHERE slug = ?"
-                          " ORDER BY category, tag", (slug,)):
+    for t in conn.execute("SELECT category, tag FROM tags WHERE nyt_id = ?"
+                          " ORDER BY category, tag", (nyt_id,)):
         tags[t["category"]].append(t["tag"])
     images = [dict(url=i["url"], alt=i["alt"], primary=bool(i["primary_"]))
-              for i in conn.execute("SELECT * FROM images WHERE slug = ?", (slug,))]
+              for i in conn.execute("SELECT * FROM images WHERE nyt_id = ?", (nyt_id,))]
     nutrition = None
     if r["nutrition_source"]:
         nutrition = {"source": r["nutrition_source"], "basis": r["nutrition_basis"],
@@ -221,16 +221,40 @@ def full_record(conn, slug):
     }
 
 
-def print_full_records(conn, slugs, fields=None):
-    for slug in slugs:
-        rec = full_record(conn, slug)
+def print_full_records(conn, nyt_ids, fields=None):
+    for nyt_id in nyt_ids:
+        rec = full_record(conn, nyt_id)
         if rec is None:
-            print("nytc: warning: no recipe with slug %r" % slug, file=sys.stderr)
+            print("nytc: warning: no recipe with nyt_id %r" % nyt_id, file=sys.stderr)
             continue
         if fields:
             keep = [f.strip() for f in fields.split(",") if f.strip()]
             rec = {k: v for k, v in rec.items() if k in keep}
         print(json.dumps(rec, ensure_ascii=False))
+
+
+def resolve_idents(conn, idents):
+    """Resolve get/similar arguments to nyt_ids. A numeric argument is an
+    nyt_id; anything else is a slug. NYT reuses some slugs for distinct
+    recipes, so one slug can resolve to several nyt_ids (all returned)."""
+    nyt_ids = []
+    for ident in idents:
+        if re.fullmatch(r"[0-9]+", ident):
+            rows = conn.execute("SELECT nyt_id FROM recipes WHERE nyt_id = ?",
+                                (int(ident),)).fetchall()
+        else:
+            rows = conn.execute("SELECT nyt_id FROM recipes WHERE slug = ?"
+                                " ORDER BY nyt_id", (ident,)).fetchall()
+        if not rows:
+            print("nytc: warning: no recipe matching %r" % ident, file=sys.stderr)
+            continue
+        if len(rows) > 1:
+            print("nytc: note: slug %r is shared by %d distinct recipes"
+                  " (nyt_ids %s); returning all"
+                  % (ident, len(rows), ", ".join(str(r["nyt_id"]) for r in rows)),
+                  file=sys.stderr)
+        nyt_ids.extend(r["nyt_id"] for r in rows)
+    return nyt_ids
 
 
 def fts_query(text):
@@ -295,8 +319,8 @@ def check_limit(args):
 
 def emit_rows(conn, args, sql, params, extra=()):
     if args.full:
-        slugs = [row["slug"] for row in conn.execute(sql, params)]
-        print_full_records(conn, slugs)
+        nyt_ids = [row["nyt_id"] for row in conn.execute(sql, params)]
+        print_full_records(conn, nyt_ids)
         return
     cur = conn.execute(sql, params)
     print(json.dumps(summary_rows(cur, args, extra=extra), ensure_ascii=False))
@@ -304,7 +328,7 @@ def emit_rows(conn, args, sql, params, extra=()):
 
 def cmd_get(args):
     conn = connect(args.db)
-    print_full_records(conn, args.slugs, fields=args.fields)
+    print_full_records(conn, resolve_idents(conn, args.idents), fields=args.fields)
 
 
 def cmd_search(args):
@@ -354,41 +378,47 @@ def cmd_similar(args):
     if args.n < 1 or args.n > 50:
         die("--n must be 1..50")
     conn = connect(args.db)
-    if not conn.execute("SELECT 1 FROM recipes WHERE slug = ?",
-                        (args.slug,)).fetchone():
-        die("no recipe with slug %r" % args.slug)
+    target_ids = resolve_idents(conn, [args.ident])
+    if not target_ids:
+        die("no recipe matching %r" % args.ident)
+    if len(target_ids) > 1:
+        die("slug %r is shared by %d distinct recipes (nyt_ids %s);"
+            " re-run with an nyt_id"
+            % (args.ident, len(target_ids),
+               ", ".join(str(i) for i in target_ids)))
+    target_id = target_ids[0]
     clause, params = build_filters(conn, args)
     # shared-tag count + shared-ingredient Jaccard over ingredients.item,
     # ties broken by rating. Positional params: slug placeholders first (in
     # textual order), then filter params, then limit.
     sql = """
-      WITH tgt_tags AS (SELECT category, tag FROM tags WHERE slug = ?),
-           tgt_ing  AS (SELECT DISTINCT item FROM ingredients WHERE slug = ?),
+      WITH tgt_tags AS (SELECT category, tag FROM tags WHERE nyt_id = ?),
+           tgt_ing  AS (SELECT DISTINCT item FROM ingredients WHERE nyt_id = ?),
            tgt_n    AS (SELECT COUNT(*) AS n FROM tgt_ing),
            cand AS (
-             SELECT r.slug,
+             SELECT r.nyt_id,
                     (SELECT COUNT(*) FROM tags t JOIN tgt_tags tt
                        ON t.category = tt.category AND t.tag = tt.tag
-                      WHERE t.slug = r.slug) AS shared_tags,
+                      WHERE t.nyt_id = r.nyt_id) AS shared_tags,
                     (SELECT COUNT(*) FROM ingredients i JOIN tgt_ing ti
-                       ON i.item = ti.item WHERE i.slug = r.slug) AS shared_ing,
+                       ON i.item = ti.item WHERE i.nyt_id = r.nyt_id) AS shared_ing,
                     (SELECT COUNT(DISTINCT item) FROM ingredients
-                      WHERE slug = r.slug) AS ing_n
+                      WHERE nyt_id = r.nyt_id) AS ing_n
              FROM recipes r
-             WHERE r.slug != ?)
+             WHERE r.nyt_id != ?)
       SELECT r.*,
              ROUND(c.shared_tags
                    + CAST(c.shared_ing AS REAL)
                      / MAX(1, (SELECT n FROM tgt_n) + c.ing_n - c.shared_ing),
                    4) AS similarity
-      FROM cand c JOIN recipes r ON r.slug = c.slug
+      FROM cand c JOIN recipes r ON r.nyt_id = c.nyt_id
       WHERE (c.shared_tags > 0 OR c.shared_ing > 0)
     """
     if clause:
         sql += " AND " + clause[len(" WHERE "):]
     sql += (" ORDER BY similarity DESC, (r.rating_average IS NULL),"
             " r.rating_average DESC LIMIT ?")
-    emit_rows(conn, args, sql, [args.slug] * 3 + params + [args.n],
+    emit_rows(conn, args, sql, [target_id] * 3 + params + [args.n],
               extra=("similarity",))
 
 
@@ -519,9 +549,9 @@ def cmd_export(args):
     conn = connect(args.db)
     clause, params = build_filters(conn, args)
     order = order_by_from_sort(args.sort) or " ORDER BY r.slug"
-    sql = "SELECT r.slug FROM recipes r%s%s LIMIT ? OFFSET ?" % (clause, order)
-    slugs = [row["slug"] for row in conn.execute(sql, params + [args.limit, args.offset])]
-    print_full_records(conn, slugs)
+    sql = "SELECT r.nyt_id FROM recipes r%s%s LIMIT ? OFFSET ?" % (clause, order)
+    nyt_ids = [row["nyt_id"] for row in conn.execute(sql, params + [args.limit, args.offset])]
+    print_full_records(conn, nyt_ids, fields=args.fields)
 
 
 def main(argv=None):
@@ -530,8 +560,8 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("get", help="full canonical record(s) by slug, one JSON object per line")
-    p.add_argument("slugs", nargs="+")
+    p = sub.add_parser("get", help="full canonical record(s) by slug or nyt_id, one JSON object per line")
+    p.add_argument("idents", nargs="+", metavar="slug-or-nyt-id")
     p.add_argument("--db", default=DEFAULT_DB)
     p.add_argument("--fields")
     p.set_defaults(func=cmd_get)
@@ -553,8 +583,8 @@ def main(argv=None):
     p.add_argument("--n", type=int, default=1)
     p.set_defaults(func=cmd_random)
 
-    p = sub.add_parser("similar", help="recipes most similar to a slug")
-    p.add_argument("slug")
+    p = sub.add_parser("similar", help="recipes most similar to a given recipe (slug or nyt_id)")
+    p.add_argument("ident", metavar="slug-or-nyt-id")
     add_filter_flags(p)
     add_output_flags(p)
     p.add_argument("--n", type=int, default=5)
