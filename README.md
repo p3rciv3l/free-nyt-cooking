@@ -2,7 +2,7 @@
 
 Every NYT cooking recipe, made easily queryable. Tell your agent to look at TOOLS.md when searching the DB.
 
-https://github.com/user-attachments/assets/19bb49ee-787e-4ceb-bc44-2eb86e12ad90
+https://github.com/user-attachments/assets/5b87cff2-509c-46c7-b8f3-62a925292a17
 
 ## Suggested queries
 
