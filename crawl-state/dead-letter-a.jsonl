@@ -21,3 +21,5 @@
 {"url": "https://cooking.nytimes.com/recipes/1013933-greek-polenta-with-onions-and-raisins", "nyt_id": "1013933", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:04:54Z"}
 {"url": "https://cooking.nytimes.com/recipes/1013934-yeasted-country-bread-with-cornmeal", "nyt_id": "1013934", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:04:56Z"}
 {"url": "https://cooking.nytimes.com/recipes/1013944-pappardelle-with-beets-beet-greens-and-goat-cheese", "nyt_id": "1013944", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:05:07Z"}
+{"url": "https://cooking.nytimes.com/recipes/1014460-blowout", "nyt_id": "1014460", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:18:08Z"}
+{"url": "https://cooking.nytimes.com/recipes/1014820-grilled-scallops-with-olive-oil-and-lemon", "nyt_id": "1014820", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:27:49Z"}
