@@ -23,3 +23,5 @@
 {"url": "https://cooking.nytimes.com/recipes/12835-candied-bacon", "nyt_id": "12835", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:21:55-0400"}
 {"url": "https://cooking.nytimes.com/recipes/12845-potato-chowder", "nyt_id": "12845", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:22:16-0400"}
 {"url": "https://cooking.nytimes.com/recipes/1425-pasta-with-vodka-sauce", "nyt_id": "1425", "reason": "http_404", "attempts": 1, "ts": "2026-09-06T23:33:44-0400"}
+{"url": "https://cooking.nytimes.com/recipes/4760-onions-a-la-monegasque", "nyt_id": "4760", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:14:27-0400"}
+{"url": "https://cooking.nytimes.com/recipes/4761-leeks-braised-in-white-wine", "nyt_id": "4761", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T02:14:30-0400"}
