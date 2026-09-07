@@ -22,7 +22,7 @@ import re
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CRAWLER_SHARD_RE = re.compile(r"^[a-z0-9-]{1,2}\.[a-z]\.jsonl$")
+CRAWLER_SHARD_RE = re.compile(r"^[A-Za-z0-9-]{1,2}\.[a-z]\.jsonl$")  # crawler files may carry source-cased prefixes
 CANONICAL_SHARD_RE = re.compile(r"^[a-z0-9-]{1,2}\.jsonl$")
 
 
@@ -53,7 +53,7 @@ def main(argv=None):
                 if not line:
                     continue
                 r = json.loads(line)
-                r["slug"] = r["slug"].lower()
+                r["slug"] = r["slug"].lower().strip("-")  # NYT serves a few capitalized/trailing-hyphen slugs
                 key = int(r["nyt_id"])
                 prev = records.get(key)
                 if prev is None or r.get("scraped_at", "") >= prev.get("scraped_at", ""):
