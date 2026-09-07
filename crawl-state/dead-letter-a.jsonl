@@ -80,3 +80,6 @@
 {"url": "https://cooking.nytimes.com/recipes/1024324-", "nyt_id": "1024324", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T07:47:57Z"}
 {"url": "https://cooking.nytimes.com/recipes/1024811-", "nyt_id": "1024811", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:07:52Z"}
 {"url": "https://cooking.nytimes.com/recipes/1025192-", "nyt_id": "1025192", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:14:21Z"}
+{"url": "https://cooking.nytimes.com/recipes/1025557-", "nyt_id": "1025557", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:23Z"}
+{"url": "https://cooking.nytimes.com/recipes/1025560-", "nyt_id": "1025560", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:27Z"}
+{"url": "https://cooking.nytimes.com/recipes/1025561-", "nyt_id": "1025561", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:29Z"}
