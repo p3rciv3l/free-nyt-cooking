@@ -83,3 +83,4 @@
 {"url": "https://cooking.nytimes.com/recipes/1025557-", "nyt_id": "1025557", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:23Z"}
 {"url": "https://cooking.nytimes.com/recipes/1025560-", "nyt_id": "1025560", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:27Z"}
 {"url": "https://cooking.nytimes.com/recipes/1025561-", "nyt_id": "1025561", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:22:29Z"}
+{"url": "https://cooking.nytimes.com/recipes/1026549-matcha-overnight-oats", "nyt_id": "1026549", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T08:51:28Z"}
