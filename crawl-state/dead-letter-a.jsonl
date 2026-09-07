@@ -67,3 +67,7 @@
 {"url": "https://cooking.nytimes.com/recipes/1020027-rotisserie-chicken-panzanella", "nyt_id": "1020027", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T04:57:51Z"}
 {"url": "https://cooking.nytimes.com/recipes/1020028-sloppy-joes", "nyt_id": "1020028", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T04:57:53Z"}
 {"url": "https://cooking.nytimes.com/recipes/1021956-pork-chops-with-onion-gravy", "nyt_id": "1021956", "reason": "parse_error", "detail": "ValueError: no ingredients", "attempts": 1, "ts": "2026-09-07T06:29:25Z"}
+{"url": "https://cooking.nytimes.com/recipes/1022861-", "nyt_id": "1022861", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T06:49:46Z"}
+{"url": "https://cooking.nytimes.com/recipes/1022890-", "nyt_id": "1022890", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T06:50:06Z"}
+{"url": "https://cooking.nytimes.com/recipes/1022919-", "nyt_id": "1022919", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T06:50:33Z"}
+{"url": "https://cooking.nytimes.com/recipes/1022997-", "nyt_id": "1022997", "reason": "http_404", "attempts": 1, "ts": "2026-09-07T06:52:49Z"}
