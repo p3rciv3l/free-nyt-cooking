@@ -435,7 +435,7 @@ def fetch(url, cache_dir, delay):
     if os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
             return fh.read(), True
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         html = resp.read().decode("utf-8", errors="replace")
     os.makedirs(cache_dir, exist_ok=True)
@@ -445,12 +445,13 @@ def fetch(url, cache_dir, delay):
     return html, False
 
 
-def write_shards(records_by_slug, data_dir):
-    """Full-record replace keyed on slug; lines sorted by slug within shard."""
+def write_shards(records_by_id, data_dir):
+    """Full-record replace keyed on nyt_id; lines sorted by (slug, nyt_id)
+    within shard so duplicate slugs stay adjacent and both survive."""
     os.makedirs(data_dir, exist_ok=True)
     by_shard = {}
-    for slug, record in records_by_slug.items():
-        by_shard.setdefault(slug[:2], {})[slug] = record
+    for nyt_id, record in records_by_id.items():
+        by_shard.setdefault(record["slug"][:2], {})[nyt_id] = record
     for shard_key, new_records in by_shard.items():
         path = os.path.join(data_dir, shard_key + ".jsonl")
         existing = {}
@@ -460,11 +461,12 @@ def write_shards(records_by_slug, data_dir):
                     line = line.strip()
                     if line:
                         r = json.loads(line)
-                        existing[r["slug"]] = r
+                        existing[r["nyt_id"]] = r
         existing.update(new_records)
+        ordered = sorted(existing.values(), key=lambda r: (r["slug"], r["nyt_id"]))
         with open(path, "w", encoding="utf-8") as fh:
-            for slug in sorted(existing):
-                fh.write(json.dumps(existing[slug], ensure_ascii=False) + "\n")
+            for r in ordered:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
 def load_checkpoint(path):
@@ -518,7 +520,7 @@ def main(argv=None):
             html, from_cache = fetch(url, args.cache_dir,
                                      0 if args.reparse_only else args.delay)
             record = build_record(url, html, scraped_at)
-            batch[record["slug"]] = record
+            batch[record["nyt_id"]] = record
             done.add(url)
             state["failed"].pop(url, None)
             status = "cache" if from_cache else "fetch"
