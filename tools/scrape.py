@@ -437,7 +437,11 @@ def fetch(url, cache_dir, delay):
             return fh.read(), True
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"})
     with urllib.request.urlopen(req, timeout=30) as resp:
-        html = resp.read().decode("utf-8", errors="replace")
+        raw = resp.read()
+    if raw[:2] == b"\x1f\x8b":  # server sometimes gzips despite identity
+        import gzip
+        raw = gzip.decompress(raw)
+    html = raw.decode("utf-8", errors="replace")
     os.makedirs(cache_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(html)
