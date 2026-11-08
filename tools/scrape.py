@@ -74,14 +74,14 @@ DIET_KEYWORDS = {"vegetarian", "vegan", "gluten-free", "dairy-free", "kosher",
                  "whole30", "paleo", "keto", "egg-free", "soy-free",
                  "shellfish-free", "low-sodium", "high-fiber"}
 
-URL_RE = re.compile(r"cooking\.nytimes\.com/recipes/(\d+)-([a-z0-9-]+)")
+URL_RE = re.compile(r"cooking\.nytimes\.com/recipes/(\d+)-([A-Za-z0-9-]+)")
 
 
 def slug_from_url(url):
     m = URL_RE.search(url)
     if not m:
         raise ValueError("not an NYT Cooking recipe URL: %s" % url)
-    return m.group(2), int(m.group(1))
+    return m.group(2).lower(), int(m.group(1))  # NYT sometimes publishes uppercase slugs; canonical slug stays lowercase
 
 
 def parse_number_prefix(text):
